@@ -1,0 +1,50 @@
+# QuizArena — app + MongoDB stack.
+#
+#   docker compose up --build
+#
+# The app serves the built client itself (same origin) at http://localhost:5001.
+# MongoDB data persists in the named volume `mongo-data`.
+# First boot: seed an admin + demo players with:
+#   docker compose exec app node server/seed/seed.js
+
+services:
+  app:
+    build: .
+    container_name: quizarena-app
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      MONGO_URI: mongodb://mongo:27017/quizarena
+      # CHANGE ME in production — generate with: openssl rand -hex 32
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRE: 8h
+      CLIENT_URL: http://localhost:5001
+      RECONNECT_GRACE_MS: 60000
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5001/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+
+  mongo:
+    image: mongo:7
+    container_name: quizarena-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo-data:
