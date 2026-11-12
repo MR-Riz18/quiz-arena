@@ -5,7 +5,9 @@ function cookieOptions() {
   const isProd = process.env.NODE_ENV === 'production';
   return {
     httpOnly: true,
-    sameSite: 'lax',
+    // Cross-site in production (frontend on Vercel, API on Render):
+    // SameSite=None + Secure, otherwise the cookie is never sent.
+    sameSite: isProd ? 'none' : 'lax',
     secure: isProd,
     maxAge: 8 * 60 * 60 * 1000, // 8h — matches JWT_EXPIRE
     path: '/',

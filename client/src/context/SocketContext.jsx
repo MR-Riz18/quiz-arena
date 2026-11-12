@@ -21,7 +21,9 @@ export function SocketProvider({ children }) {
 
   const getSocket = useCallback(() => {
     if (!socketRef.current) {
-      const s = io({
+      // In production the Socket.IO server is the hosted backend
+      // (VITE_API_URL); unset in dev, io() connects to the same origin.
+      const s = io(import.meta.env.VITE_API_URL || undefined, {
         withCredentials: true,
         reconnection: true,
         reconnectionAttempts: Infinity,

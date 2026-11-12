@@ -1,8 +1,10 @@
 import axios from 'axios';
 
 // All auth is via the httpOnly `token` cookie, so every request carries credentials.
+// In production the backend lives on its own host (Render); VITE_API_URL
+// points the built frontend at it. Unset in dev — Vite proxies /api.
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
   withCredentials: true,
   timeout: 15000,
 });
