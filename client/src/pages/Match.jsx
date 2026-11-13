@@ -23,7 +23,7 @@ export default function Match() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { subscribe, emit, setActiveMatch, clearActiveMatch, connected } = useSocket();
+  const { subscribe, emit, setActiveMatch, clearActiveMatch, connected, joinRoom } = useSocket();
   const { toast } = useToast();
 
   const [phase, setPhase] = useState('loading'); // loading | battle | cancelled | error
@@ -66,7 +66,12 @@ export default function Match() {
         setCancelReason(snap.reason || 'The match was cancelled.');
         return;
       }
-      if (snap.roomCode) setRoomCode(snap.roomCode);
+      if (snap.roomCode) {
+        setRoomCode(snap.roomCode);
+        // Re-join the room (e.g. after a refresh the socket is not in it yet),
+        // otherwise no live question/score events arrive for this match.
+        joinRoom(snap.roomCode);
+      }
       setTotalQuestions(snap.totalQuestions || 0);
       if (snap.scores) setScores(snap.scores);
       if (snap.leaderboard) setLeaderboard(snap.leaderboard);
@@ -112,7 +117,7 @@ export default function Match() {
         }
       }
     },
-    [matchId, navigate, toast]
+    [matchId, navigate, toast, joinRoom]
   );
 
   // ---- socket wiring -------------------------------------------------------
@@ -120,6 +125,10 @@ export default function Match() {
     // (Re)register this match as active and ask the server for a snapshot.
     // Works for a fresh start (engine live state) and for refresh/reconnect.
     setActiveMatch(matchId, location.state?.roomCode);
+    // Make sure this socket is in the room so live question/score events flow.
+    // (The lobby no longer leaves the room when the match starts, but a
+    // refresh or a reconnect can still leave us outside it.)
+    if (location.state?.roomCode) joinRoom(location.state.roomCode);
 
     const unsubs = [
       subscribe('match:snapshot', applySnapshot),

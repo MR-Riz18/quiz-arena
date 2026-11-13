@@ -4,6 +4,34 @@ No API contract, routes, features, or branding were changed. All fixes below
 keep the existing behaviour; only defaults that disagreed with the rest of the
 project were aligned.
 
+## Fix added 2026-11-13 — match ended instantly with no questions ("any player just wins")
+
+**Symptom (live site):** in a 2-player room game, no question was ever shown; one
+screen showed "You win" at once and the other stayed loading. Reproduced locally
+with two socket players: the match was forfeited ~0s after `match:started`,
+winner 0–0, 0 questions asked.
+
+**Cause:** `client/src/pages/Lobby.jsx` unmounted when the match started
+(navigation to `/match/:id`), and its cleanup ran `leaveRoom(code)`. The server
+treats `room:leave` during a live match as an immediate abandon
+(`abandonOnRoomLeave` → `abandonPlayer` → with 1 connected player left in a
+2-player match, `finalizeForfeit`). The socket also left `room:<code>`, so the
+battle screen never received `question:*` / `match:completed` events.
+
+**Fix:**
+- `Lobby.jsx` — only leave the room on unmount when NOT going to a match
+  (`goingToMatch` ref set in the `match:started` handler). Leaving via the
+  Leave button still abandons/forfeits as designed. `room:updated` now also
+  ignores updates for a different room code.
+- `Match.jsx` — (re)joins the room on mount and when a snapshot carries a
+  `roomCode`, so live events flow even after a refresh/reconnect (previously
+  the battle screen relied on the socket still being in the room).
+
+**Verified locally:** same 2-player simulation — before the fix 0 questions and
+an instant 0–0 forfeit; with the fix (no `room:leave` on match start) all
+3 questions were asked, answers accepted, scores updated, match completed
+normally after the last question.
+
 ## Bugs found & fixed
 
 1. **Dev API proxy pointed at the wrong port** — `client/vite.config.js`

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Copy, Check, Crown, Play, LogOut, Loader2, Users, Settings2, WifiOff, Share2,
@@ -29,6 +29,11 @@ export default function Lobby() {
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [countdownMs, setCountdownMs] = useState(null);
   const [starting, setStarting] = useState(false);
+  // True once the match has started and we navigate to the battle screen.
+  // The cleanup below must NOT leave the room in that case: leaving mid-match
+  // is treated by the server as abandoning, which forfeits the match at once
+  // (no questions asked) and stops all room events for this player.
+  const goingToMatch = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,7 +58,7 @@ export default function Lobby() {
     joinRoom(upperCode);
     const unsubs = [
       subscribe('room:updated', (payload) => {
-        if (payload?.room) setRoom(payload.room);
+        if (payload?.room && payload.room.code === upperCode) setRoom(payload.room);
       }),
       subscribe('room:player-joined', ({ user: u }) => {
         if (u) toast.info(`${u.username} joined the room`);
@@ -75,13 +80,17 @@ export default function Lobby() {
       }),
       subscribe('match:started', ({ matchId, roomCode }) => {
         if (!matchId) return;
+        goingToMatch.current = true;
         setActiveMatch(matchId, roomCode || upperCode);
         navigate(`/match/${matchId}`, { state: { roomCode: roomCode || upperCode }, replace: true });
       }),
     ];
     return () => {
       unsubs.forEach((u) => u());
-      leaveRoom(upperCode);
+      // Only leave when the player is really going away (back to rooms, etc).
+      // Navigating to the battle screen must keep the socket in the room:
+      // leaving now would abandon the match and forfeit it instantly.
+      if (!goingToMatch.current) leaveRoom(upperCode);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upperCode]);
